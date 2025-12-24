@@ -26,13 +26,11 @@ Check if PR is open. If merged or closed, inform the user.
 
 ### Step 3: Load Custom Rules and Conventions
 
-**IMPORTANT:** Before reviewing, check for project-specific rules:
+**Check for project-specific rules (do all checks in one step):**
 
-#### 3.1 Check for `.claude-review.yml` or `.claude-review.json`
+#### 3.1 Check for `.claude-review.yml`
 ```bash
-gh api repos/<OWNER>/<REPO>/contents/.claude-review.yml --jq '.content' | base64 -d
-# or
-gh api repos/<OWNER>/<REPO>/contents/.claude-review.json --jq '.content' | base64 -d
+gh api repos/<OWNER>/<REPO>/contents/.claude-review.yml --jq '.content' 2>/dev/null | base64 -d
 ```
 
 If found, parse and apply:
@@ -40,80 +38,95 @@ If found, parse and apply:
 - `forbidden_patterns`: Patterns that must not appear
 - `required_patterns`: Patterns to warn about
 - `ignore`: Files/paths to skip
-- `documentation`: Documentation requirements
-- `architecture`: Layer dependency rules
 
-#### 3.2 Check for `CLAUDE.md` in repository
+#### 3.2 Check for `CLAUDE.md`
 ```bash
-gh api repos/<OWNER>/<REPO>/contents/CLAUDE.md --jq '.content' | base64 -d
+gh api repos/<OWNER>/<REPO>/contents/CLAUDE.md --jq '.content' 2>/dev/null | base64 -d
 ```
 
 If found, extract coding conventions and project-specific guidelines.
-
-#### 3.3 Check for common config files
-Also check for existing linter configs to understand project standards:
-- `.swiftlint.yml` (Swift)
-- `.eslintrc.*` (JavaScript/TypeScript)
-- `pylint.rc` / `.flake8` (Python)
-- `.golangci.yml` (Go)
 
 ### Step 4: Get the PR Diff
 ```bash
 gh pr diff <PR_NUMBER> --repo <OWNER/REPO>
 ```
 
-Read the full diff to understand all changes.
+### Step 5: Analyze the Code (NO USER INTERACTION)
 
-### Step 5: Analyze the Code
-
-Review ALL changed files (except those in `ignore` list), applying:
+Review ALL changed files silently, applying:
 
 #### 5.1 Custom Rules (from `.claude-review.yml`)
-For each rule in config:
-- Check if code violates the rule
-- Use severity level (error/warning/info) from config
-- Provide fix examples from config if available
+- Check if code violates each rule
+- Note severity level (error/warning/info)
+- Collect fix examples from config
 
-#### 5.2 Forbidden Patterns
-Scan for any `forbidden_patterns`:
-- Hardcoded secrets
-- Banned functions
-- Security vulnerabilities
-
-#### 5.3 Required Patterns
-Check for `required_patterns` and warn if found:
-- TODO/FIXME comments
-- Debug statements
-
-#### 5.4 Default Checks (always apply)
-
-**Critical Issues (must report):**
-- 🐛 **Bugs**: Logic errors, null pointer issues, off-by-one errors, race conditions
-- ⚠️ **Security**: SQL injection, XSS, hardcoded secrets, improper input validation
-- ⚡ **Performance**: Memory leaks, N+1 queries, inefficient algorithms
-
-**Code Quality:**
+#### 5.2 Default Checks
+- 🐛 **Bugs**: Logic errors, null pointer issues, race conditions
+- ⚠️ **Security**: SQL injection, XSS, hardcoded secrets
+- ⚡ **Performance**: Memory leaks, retain cycles, N+1 queries
 - 💡 **Suggestions**: Better approaches, design patterns
 - 📝 **Convention**: Violations of project coding standards
-- ❓ **Questions**: Unclear logic, missing context
 
-#### 5.5 Language-Specific Checks
+#### 5.3 Language-Specific Checks
 - **Swift/iOS**: `[weak self]`, main thread UI, retain cycles, access control
 - **JavaScript/TypeScript**: Async/await, type safety, memory leaks
 - **Python**: Type hints, exception handling, resource cleanup
 - **Go**: Error handling, goroutine leaks, defer usage
-- **Rust**: Ownership, unsafe blocks, error handling
 
-### Step 6: Determine Line Numbers
+### Step 6: Prepare Review (COLLECT ALL COMMENTS)
 
-For each issue found:
-1. Verify the line exists in the NEW version of the file
-2. Use diff output to find correct line numbers
-3. Only comment on lines that are added (+) or context in the diff
+**DO NOT post yet.** Collect all findings into a structured preview:
 
-### Step 7: Post Review with Inline Comments
+```
+═══════════════════════════════════════════════════════════════
+                    📋 REVIEW PREVIEW
+═══════════════════════════════════════════════════════════════
 
-Use the GitHub API with JSON input:
+PR: #<number> - <title>
+Files: <count> | Changes: +<add> / -<del>
+
+───────────────────────────────────────────────────────────────
+                    INLINE COMMENTS (<count>)
+───────────────────────────────────────────────────────────────
+
+1. [<SEVERITY>] <file>:<line>
+   <comment body preview - first 100 chars>
+
+2. [<SEVERITY>] <file>:<line>
+   <comment body preview>
+
+...
+
+───────────────────────────────────────────────────────────────
+                    SUMMARY
+───────────────────────────────────────────────────────────────
+
+✅ Good: <count points>
+🔴 Errors: <count>
+🟡 Warnings: <count>
+🔵 Info: <count>
+
+Verdict: <APPROVE/REQUEST_CHANGES/COMMENT>
+
+═══════════════════════════════════════════════════════════════
+```
+
+### Step 7: ASK USER FOR CONFIRMATION (ONLY ONCE)
+
+**Use the AskUserQuestion tool** to ask user:
+
+```
+Ready to post this review to GitHub?
+
+Options:
+- Post Review (post all comments)
+- Post Summary Only (no inline comments)
+- Cancel (don't post anything)
+```
+
+### Step 8: Post Review (ONLY AFTER USER CONFIRMS)
+
+If user confirms, post using GitHub API:
 
 ```bash
 gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
@@ -126,7 +139,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
     {
       "path": "relative/path/to/file.ext",
       "line": <LINE_NUMBER>,
-      "body": "<COMMENT_WITH_EMOJI_PREFIX>"
+      "body": "<COMMENT_BODY>"
     }
   ]
 }
@@ -138,12 +151,16 @@ EOF
 - `"APPROVE"` - Approve PR (cannot approve own PR)
 - `"REQUEST_CHANGES"` - Request changes (use for errors)
 
-**Choose based on findings:**
-- Only `info` level issues → `"APPROVE"` or `"COMMENT"`
-- Has `warning` level issues → `"COMMENT"`
-- Has `error` level issues → `"REQUEST_CHANGES"`
+### Step 9: Report Result
 
-### Step 8: Format the Summary
+After posting, show:
+- ✅ Review posted successfully
+- Link to the review on GitHub
+- Summary of what was posted
+
+---
+
+## Summary Format
 
 ```markdown
 ## 🔍 Code Review
@@ -153,7 +170,7 @@ EOF
 **Changes:** +<additions> / -<deletions> lines across <file_count> files
 
 ### 📋 Summary
-<1-2 sentence description of what this PR does>
+<1-2 sentence description>
 
 ### 📏 Rules Applied
 - Project config: `.claude-review.yml` ✓/✗
@@ -165,7 +182,7 @@ EOF
 - <Positive point 2>
 
 ### 🔍 Review Details
-<N> inline comment(s) added to specific lines.
+<N> inline comment(s) added.
 
 | Severity | Count |
 |----------|-------|
@@ -175,54 +192,44 @@ EOF
 
 ### 📊 Verdict: <APPROVE ✅ | REQUEST_CHANGES 🔄 | COMMENT 💬>
 
-<Final recommendation>
-
 ---
 *🤖 Reviewed by [Claude Code](https://claude.ai/code)*
 ```
 
 ## Comment Format
 
-Include rule ID when from custom config:
-
 ```
-🔴 **[swift-no-force-unwrap]** Force unwrap detected
+<EMOJI> **[<rule-id>]** <Title>
 
-Force unwrapping can cause crashes at runtime.
+<Description of the issue>
 
 **Fix:**
-\`\`\`swift
-guard let value = optional else { return }
+\`\`\`<language>
+<code example>
 \`\`\`
 ```
 
-## Comment Prefixes by Severity
+## Severity Mapping
 
-| Severity | Emoji | From Config |
-|----------|-------|-------------|
-| Error | 🔴 | `severity: error` |
-| Warning | 🟡 | `severity: warning` |
-| Info | 🔵 | `severity: info` |
-| Bug | 🐛 | Default check |
-| Security | ⚠️ | Default check |
-| Performance | ⚡ | Default check |
-| Suggestion | 💡 | Default check |
-| Convention | 📝 | From CLAUDE.md |
-| Good | ✅ | Praise |
+| Severity | Emoji | Event |
+|----------|-------|-------|
+| Error | 🔴 | REQUEST_CHANGES |
+| Warning | 🟡 | COMMENT |
+| Info | 🔵 | COMMENT |
+| Bug | 🐛 | REQUEST_CHANGES |
+| Security | ⚠️ | REQUEST_CHANGES |
+| Performance | ⚡ | COMMENT |
+| Suggestion | 💡 | COMMENT |
+| Good | ✅ | - |
 
 ## Error Handling
 
-- If config file not found → Use default rules only
-- If PR URL invalid → Show correct format
-- If `gh` not authenticated → Instruct to run `gh auth login`
-- If PR merged/closed → Inform user
-- If no issues found → Post approval with positive feedback
+- Config not found → Use default rules only
+- PR URL invalid → Show correct format
+- `gh` not authenticated → Instruct to run `gh auth login`
+- PR merged/closed → Inform user
+- No issues found → Post approval with positive feedback
 
-## Tips
+## Key Principle
 
-1. **Check config first** - Always look for `.claude-review.yml`
-2. **Respect ignore patterns** - Skip files in ignore list
-3. **Use rule IDs** - Reference rule IDs in comments for traceability
-4. **Match severity** - Use severity from config, not just default
-5. **Show examples** - Use examples from config when available
-6. **Be consistent** - Apply same rules across all files
+**ASK USER ONLY ONCE** - at the end, before posting. All analysis should happen silently without user interaction.
