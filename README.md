@@ -44,6 +44,15 @@ mkdir -p .claude/commands && curl -o .claude/commands/review.md \
 
 2. **Claude Code** - [Install Claude Code](https://claude.ai/code)
 
+3. **(Optional) Auto-approve `gh` commands** - To avoid yes/no prompts:
+
+   Add these patterns to your Claude Code permissions (run `/permissions` or edit settings):
+   ```
+   Bash(gh pr view:*)
+   Bash(gh pr diff:*)
+   Bash(gh api:*)
+   ```
+
 ## 🚀 Usage
 
 ```bash
@@ -53,9 +62,10 @@ mkdir -p .claude/commands && curl -o .claude/commands/review.md \
 Claude will:
 1. ✅ Load your custom rules (`.claude-review.yml`)
 2. ✅ Read project conventions (`CLAUDE.md`)
-3. ✅ Analyze all code changes
-4. ✅ Post inline comments on specific lines
-5. ✅ Submit a comprehensive review summary
+3. ✅ Analyze all code changes (silently, no prompts)
+4. ✅ Show preview of all comments
+5. ✅ **Ask once** → Post Review / Post Summary Only / Cancel
+6. ✅ Submit review to GitHub
 
 ## 📏 Custom Rules
 
