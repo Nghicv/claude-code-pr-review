@@ -1,0 +1,166 @@
+# .claude-review.yml - Custom rules for Claude Code PR Review
+# Place this file in your repository root
+
+# Project language (helps Claude focus on language-specific issues)
+language: swift
+
+# Severity levels: error (must fix), warning (should fix), info (suggestion)
+
+# Custom rules to check
+rules:
+  # Naming conventions
+  - id: naming-camelcase
+    name: "Use camelCase for variables and functions"
+    severity: warning
+    description: "Variables and functions should use camelCase naming"
+    examples:
+      bad: "let MyVariable = 1"
+      good: "let myVariable = 1"
+
+  - id: naming-pascalcase
+    name: "Use PascalCase for types"
+    severity: warning
+    description: "Classes, structs, enums should use PascalCase"
+    examples:
+      bad: "class myClass {}"
+      good: "class MyClass {}"
+
+  # Code style
+  - id: max-line-length
+    name: "Maximum line length"
+    severity: info
+    value: 120
+    description: "Lines should not exceed 120 characters"
+
+  - id: max-function-length
+    name: "Maximum function length"
+    severity: warning
+    value: 50
+    description: "Functions should not exceed 50 lines"
+
+  # Swift-specific rules
+  - id: swift-weak-self
+    name: "Use [weak self] in escaping closures"
+    severity: error
+    description: "Escaping closures should capture self weakly to prevent retain cycles"
+    examples:
+      bad: |
+        api.fetch { result in
+            self.handle(result)
+        }
+      good: |
+        api.fetch { [weak self] result in
+            self?.handle(result)
+        }
+
+  - id: swift-guard-early-return
+    name: "Prefer guard for early return"
+    severity: info
+    description: "Use guard statements for early returns to reduce nesting"
+    examples:
+      bad: |
+        if let value = optional {
+            // long code block
+        }
+      good: |
+        guard let value = optional else { return }
+        // code continues
+
+  - id: swift-no-force-unwrap
+    name: "Avoid force unwrap"
+    severity: error
+    description: "Force unwrapping (!) can cause crashes. Use optional binding instead"
+    exceptions:
+      - "IBOutlets"
+      - "Test files"
+
+  - id: swift-no-force-cast
+    name: "Avoid force cast"
+    severity: error
+    description: "Force casting (as!) can cause crashes. Use conditional casting (as?) instead"
+
+  - id: swift-access-control
+    name: "Use appropriate access control"
+    severity: info
+    description: "Mark private properties and methods as private"
+
+# Patterns to always flag
+required_patterns:
+  - pattern: "// TODO:"
+    action: "warn"
+    message: "TODO comment found - consider addressing before merge"
+
+  - pattern: "// FIXME:"
+    action: "error"
+    message: "FIXME comment found - must be addressed before merge"
+
+  - pattern: "print\\("
+    action: "warn"
+    message: "Debug print statement found - remove before merge"
+    exceptions:
+      - "**/Debug/**"
+      - "**/*Test*.swift"
+
+# Patterns to forbid
+forbidden_patterns:
+  - pattern: "password.*=.*[\"'].*[\"']"
+    severity: error
+    message: "Hardcoded password detected"
+
+  - pattern: "api[_-]?key.*=.*[\"'].*[\"']"
+    severity: error
+    message: "Hardcoded API key detected"
+
+  - pattern: "secret.*=.*[\"'].*[\"']"
+    severity: error
+    message: "Hardcoded secret detected"
+
+# Files/paths to ignore during review
+ignore:
+  - "*.generated.swift"
+  - "*.pb.swift"
+  - "R.generated.swift"
+  - "Pods/**"
+  - "Carthage/**"
+  - "vendor/**"
+  - "node_modules/**"
+  - "*.min.js"
+  - "*.bundle.js"
+
+# Documentation requirements
+documentation:
+  require_for:
+    - "public func"
+    - "public class"
+    - "public struct"
+    - "public enum"
+  format: "/// description"
+
+# Test requirements
+testing:
+  require_tests_for:
+    - "ViewModel"
+    - "Service"
+    - "Manager"
+  naming_pattern: "*Tests.swift"
+
+# Architecture rules
+architecture:
+  # Layer dependencies (inner layers cannot import outer layers)
+  layers:
+    - name: "Domain"
+      path: "**/Domain/**"
+      can_import: []
+    - name: "Data"
+      path: "**/Data/**"
+      can_import: ["Domain"]
+    - name: "Presentation"
+      path: "**/Presentation/**"
+      can_import: ["Domain"]
+
+# Pull request requirements
+pr_requirements:
+  max_files_changed: 20
+  max_lines_changed: 500
+  require_description: true
+  require_tests: false

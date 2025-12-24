@@ -1,41 +1,32 @@
-# 🤖 Claude Code Review
+# 🤖 Claude Code PR Review
 
-A [Claude Code](https://claude.ai/code) custom slash command that automatically reviews GitHub Pull Requests and posts inline comments on specific code lines.
+A [Claude Code](https://claude.ai/code) custom slash command that automatically reviews GitHub Pull Requests with inline comments, following your project's coding conventions and custom rules.
 
-![Claude Code Review Demo](https://img.shields.io/badge/Claude_Code-Skill-blue)
+![Claude Code Review](https://img.shields.io/badge/Claude_Code-Skill-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
 
 - 🔍 **Automatic Code Analysis** - Reviews code for bugs, security issues, and best practices
 - 💬 **Inline Comments** - Posts comments directly on specific lines of code
-- 🌐 **Multi-Language Support** - Works with Swift, TypeScript, Python, Go, Rust, and more
-- 📊 **Structured Summary** - Provides organized review with categorized findings
+- 📏 **Custom Rules** - Define your own coding standards via `.claude-review.yml`
+- 📖 **CLAUDE.md Support** - Reads project conventions from CLAUDE.md
+- 🌐 **Multi-Language** - Works with Swift, TypeScript, Python, Go, Rust, and more
 - 🚀 **One Command** - Just run `/review <PR_URL>` and let Claude do the rest
 
 ## 📦 Installation
 
-### Option 1: Global Installation (Recommended)
-
-Copy the skill file to your Claude Code commands directory:
+### Quick Install (1-liner)
 
 ```bash
-# Create the commands directory if it doesn't exist
-mkdir -p ~/.claude/commands
-
-# Download the review skill
-curl -o ~/.claude/commands/review.md \
+mkdir -p ~/.claude/commands && curl -o ~/.claude/commands/review.md \
   https://raw.githubusercontent.com/Nghicv/claude-code-pr-review/main/review.md
 ```
 
-### Option 2: Project-Local Installation
-
-Add to a specific project:
+### Project-Local Installation
 
 ```bash
-# In your project root
-mkdir -p .claude/commands
-curl -o .claude/commands/review.md \
+mkdir -p .claude/commands && curl -o .claude/commands/review.md \
   https://raw.githubusercontent.com/Nghicv/claude-code-pr-review/main/review.md
 ```
 
@@ -43,51 +34,138 @@ curl -o .claude/commands/review.md \
 
 1. **GitHub CLI** - Install and authenticate:
    ```bash
-   # Install (macOS)
-   brew install gh
-
-   # Install (Ubuntu/Debian)
-   sudo apt install gh
+   # Install
+   brew install gh        # macOS
+   sudo apt install gh    # Ubuntu/Debian
 
    # Authenticate
    gh auth login
    ```
 
-2. **Claude Code** - Make sure you have [Claude Code](https://claude.ai/code) installed
+2. **Claude Code** - [Install Claude Code](https://claude.ai/code)
 
 ## 🚀 Usage
 
-In Claude Code, simply run:
-
-```
+```bash
 /user:review https://github.com/owner/repo/pull/123
 ```
 
-Or for project-local installation:
-
-```
-/project:review https://github.com/owner/repo/pull/123
-```
-
 Claude will:
-1. Fetch the PR details and diff
-2. Analyze all code changes
-3. Identify bugs, security issues, and improvements
-4. Post inline comments on specific lines
-5. Submit a comprehensive review summary
+1. ✅ Load your custom rules (`.claude-review.yml`)
+2. ✅ Read project conventions (`CLAUDE.md`)
+3. ✅ Analyze all code changes
+4. ✅ Post inline comments on specific lines
+5. ✅ Submit a comprehensive review summary
+
+## 📏 Custom Rules
+
+Create a `.claude-review.yml` file in your repository root to define custom coding standards:
+
+```yaml
+# .claude-review.yml
+
+language: swift
+
+rules:
+  # Naming conventions
+  - id: naming-camelcase
+    name: "Use camelCase for variables"
+    severity: warning
+    examples:
+      bad: "let MyVariable = 1"
+      good: "let myVariable = 1"
+
+  # Swift-specific
+  - id: swift-weak-self
+    name: "Use [weak self] in closures"
+    severity: error
+    description: "Prevent retain cycles in escaping closures"
+    examples:
+      bad: |
+        api.fetch { result in
+            self.handle(result)
+        }
+      good: |
+        api.fetch { [weak self] result in
+            self?.handle(result)
+        }
+
+  - id: swift-no-force-unwrap
+    name: "Avoid force unwrap"
+    severity: error
+    exceptions:
+      - "IBOutlets"
+      - "Test files"
+
+# Forbidden patterns (will trigger errors)
+forbidden_patterns:
+  - pattern: "password.*=.*[\"'].*[\"']"
+    message: "Hardcoded password detected"
+
+  - pattern: "api[_-]?key.*=.*[\"']"
+    message: "Hardcoded API key detected"
+
+# Patterns to warn about
+required_patterns:
+  - pattern: "// TODO:"
+    action: warn
+    message: "TODO found - address before merge"
+
+  - pattern: "print\\("
+    action: warn
+    message: "Debug print statement found"
+
+# Files to skip
+ignore:
+  - "*.generated.swift"
+  - "Pods/**"
+  - "node_modules/**"
+
+# Documentation requirements
+documentation:
+  require_for:
+    - "public func"
+    - "public class"
+```
+
+### Severity Levels
+
+| Level | Emoji | Effect |
+|-------|-------|--------|
+| `error` | 🔴 | Triggers REQUEST_CHANGES |
+| `warning` | 🟡 | Highlighted but won't block |
+| `info` | 🔵 | Suggestion only |
+
+## 📖 CLAUDE.md Support
+
+The reviewer also reads your project's `CLAUDE.md` file for additional context:
+
+```markdown
+# CLAUDE.md
+
+## Coding Conventions
+- Use MVVM architecture
+- All ViewModels must be final classes
+- Use `[weak self]` in all closures
+- Maximum function length: 30 lines
+
+## Naming
+- ViewControllers: `*ViewController`
+- ViewModels: `*ViewModel`
+- Use camelCase for variables
+```
 
 ## 📝 Example Output
 
 ### Inline Comments
-![Inline Comment Example](docs/inline-comment.png)
-
-Comments are posted directly on the relevant lines:
 
 ```
-🐛 **Bug:** This will crash if `user` is nil.
+🔴 **[swift-no-force-unwrap]** Force unwrap detected
+
+Force unwrapping can cause crashes at runtime.
 
 **Fix:**
-guard let user = user else { return }
+guard let value = optional else { return }
 ```
 
 ### Review Summary
@@ -98,18 +176,23 @@ guard let user = user else { return }
 **PR:** #123 - Add user authentication
 **Changes:** +500 / -20 lines across 8 files
 
+### 📏 Rules Applied
+- Project config: `.claude-review.yml` ✓
+- CLAUDE.md conventions: ✓
+- Default rules: ✓
+
 ### ✅ What's Good
-- Clean separation of concerns
+- Clean MVVM architecture
 - Proper error handling
 
 ### 🔍 Review Details
 5 inline comment(s) added.
 
-| Type | Count |
-|------|-------|
-| 🐛 Bugs | 2 |
-| ⚠️ Security | 1 |
-| 💡 Suggestions | 2 |
+| Severity | Count |
+|----------|-------|
+| 🔴 Error | 2 |
+| 🟡 Warning | 2 |
+| 🔵 Info | 1 |
 
 ### 📊 Verdict: REQUEST_CHANGES 🔄
 ```
@@ -118,21 +201,28 @@ guard let user = user else { return }
 
 | Emoji | Type | Description |
 |-------|------|-------------|
-| 🐛 | Bug | Logic errors, crashes, incorrect behavior |
-| ⚠️ | Security | Vulnerabilities, injection, secrets exposure |
-| ⚡ | Performance | Memory leaks, inefficient algorithms |
-| 💡 | Suggestion | Improvements, refactoring opportunities |
-| 📝 | Style | Naming, formatting, documentation |
-| ❓ | Question | Clarification needed |
-| ✅ | Good | Praise for well-written code |
+| 🔴 | Error | Must fix (from rules with `severity: error`) |
+| 🟡 | Warning | Should fix (from rules with `severity: warning`) |
+| 🔵 | Info | Suggestion (from rules with `severity: info`) |
+| 🐛 | Bug | Logic errors, crashes |
+| ⚠️ | Security | Vulnerabilities |
+| ⚡ | Performance | Memory leaks, inefficient code |
+| 💡 | Suggestion | Improvements |
+| 📝 | Convention | Style/naming issues |
 
-## ⚙️ Customization
+## 📁 Project Structure
 
-You can modify `review.md` to:
-- Add language-specific checks
-- Change comment format
-- Adjust review criteria
-- Add custom rules for your team
+```
+your-repo/
+├── .claude-review.yml    # Custom review rules
+├── CLAUDE.md             # Project conventions
+└── src/
+    └── ...
+```
+
+## ⚙️ Configuration Reference
+
+See [`.claude-review.example.yml`](.claude-review.example.yml) for a complete example with all available options.
 
 ## 🤝 Contributing
 
@@ -145,12 +235,12 @@ Contributions are welcome! Please:
 
 MIT License - See [LICENSE](LICENSE) for details.
 
-## 🔗 Related
+## 🔗 Links
 
-- [Claude Code](https://claude.ai/code) - The AI-powered CLI
-- [GitHub CLI](https://cli.github.com/) - GitHub's official CLI
-- [Claude Code Documentation](https://docs.anthropic.com/claude-code)
+- [Claude Code](https://claude.ai/code)
+- [GitHub CLI](https://cli.github.com/)
+- [Example Config](.claude-review.example.yml)
 
 ---
 
-Made with ❤️ by the community
+Made with ❤️ for better code reviews
