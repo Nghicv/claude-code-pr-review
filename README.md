@@ -25,7 +25,7 @@ mkdir -p ~/.claude/commands
 
 # Download the review skill
 curl -o ~/.claude/commands/review.md \
-  https://raw.githubusercontent.com/user/claude-code-review/main/review.md
+  https://raw.githubusercontent.com/Nghicv/claude-code-pr-review/main/review.md
 ```
 
 ### Option 2: Project-Local Installation
@@ -36,7 +36,7 @@ Add to a specific project:
 # In your project root
 mkdir -p .claude/commands
 curl -o .claude/commands/review.md \
-  https://raw.githubusercontent.com/user/claude-code-review/main/review.md
+  https://raw.githubusercontent.com/Nghicv/claude-code-pr-review/main/review.md
 ```
 
 ## 🔧 Prerequisites
